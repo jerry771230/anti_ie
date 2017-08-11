@@ -43,7 +43,7 @@ function detectIE() {
 }
 
 $(function() {
-    if (!detectIE()) {
+    if (detectIE()) {
 
         // 彈出遮罩
         $("#bg").css({
