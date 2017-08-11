@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <link rel="stylesheet" href="/css/index.css">
+    <script src="http://code.jquery.com/jquery-2.2.4.min.js" integrity="sha256-BbhdlvQf/xTY9gja0Dq3HiwQF8LaCRTXxZKRutelT44=" crossorigin="anonymous"></script>
+    <title>Anti IE</title>
+</head>
+
+<body>
+
+    <div class="content">
+        Your Node.js authentication tutorial is (probably) wrong tl;dr: I went on a search of Node.js/Express.js authentication tutorials. All of them were incomplete or made a security mistake in some way that can potentially hurt new users. This post explores
+        some common authentication pitfalls, how to avoid them, and what to do to help yourself when your tutorials don’t help you anymore. I am still searching for a robust, all-in-one solution for authentication in Node/Express that rivals Rails’s Devise.
+        Update (Aug 7): RisingStack has reached out and no longer stores passwords in plaintext in their tutorial, opting to move to bcrypt in their example codes and tutorials. Update (Aug 8): Editing title to Your Node.js authentication tutorial is
+        (probably) wrong, as this post has improved some of these tutorials. Update (Aug 10): Dan McGhan found that one of the tutorials has addressed an issue that I had somehow missed in this documentation. I’ve omitted the graf for now, as Medium doesn’t
+        allow for strikethrough. After all, I make mistakes, too. 😊 An addendum is placed at the end of this article. In my spare time, I’ve been digging through various Node.js tutorials, as it seems that every Node.js developer with a blog has released
+        their own tutorial on how to do things the right way, or, more accurately, the way they do them. Thousands of front-end developers being thrown into the server-side JS maelstrom are trying to piece together actionable knowledge from these tutorials,
+        either by cargo-cult-copypasta or gratuitous use of npm install as they scramble frantically to meet the deadlines set for them by outsourcing managers or ad agency creative directors. One of the more questionable things in Node.js development
+        is that authentication is largely left as an exercise to the individual developer. The de facto authentication solution in the Express.js world is Passport, which offers a host of strategies for authentication. If you want a robust solution similar
+        to Plataformatec’s Devise for Ruby on Rails, you’ll likely be pointed to Auth0, a startup who has made authentication as a service. Compared to Devise, Passport is simply authentication middleware, and does not handle any of the other parts of
+        authentication for you: that means the Node.js developer is likely to roll their own API token mechanisms, password reset token mechanisms, user authentication routes and endpoints, and views in whatever templating language is the rage today.
+        Because of this, there are a lot of tutorials that specialize in setting up Passport for your Express.js application, and nearly all of them are wrong in some way or another, and none properly implement the full stack necessary for a working web
+        application. Note: I’m not attempting to harass the developers of these tutorials specifically, but rather I am using their authentication mistakes to show security issues inherent in rolling your own authentication systems. If you are a tutorial
+        writer, feel free to reach out to me once you’ve updated your tutorial. Let’s make Node/Express a safer ecosystem for new developers. Mistake one: credential storage Let’s start with credential storage. Storing and recalling credentials is pretty
+        standard fare for identity management, and the traditional way to do this is in your own database or application. Passport, being middleware that simply says “this user is cool” or “this user is not cool”, requires the passport-local module for
+        handling password storage in your own database, written by the same developer as Passport.js itself. Before we go down this tutorial rabbit hole, let’s remind ourselves of a great cheat sheet for password storage by OWASP, which boils down to
+        “store high-entropy passwords with unique salts and one-way adaptive cost functions”. Or, really, Coda Hale’s bcrypt meme, even though there’s some contention. Note for experienced developers: If you really want to work with state of the art credential
+        storage, Argon2 is the winner of the Password Hashing Competition and now has some easy support in Node.js. Unfortunately, documentation for the implementation of Argon2 for novice users in the Node.js ecosystem is still lacking, and given that
+        this is targeted toward people reading tutorials, sticking with bcrypt for the next few months seemed an OK tradeoff. As a new Express.js and Passport user, my first place to look will be the example code for passport-local itself, which thankfully
+        gives me a sample Express.js 4.0 application I can clone and extend. However, if I just copypasta this, I’m not left with too much, as there’s no database support in the example and it assumes I’m just using some set accounts. That’s OK, though,
+        right? It’s just an Intranet application, the dev says, and I have four other projects assigned to me due next week. Of course, the passwords for the example aren’t hashed in any way, and stored in plaintext right alongside the validation logic
+        in this example. Credential storage isn’t even considered in this one. Let’s google for another tutorial using passport-local. I find this quick tutorial from RisingStack in a series called “Node Hero”, but that doesn’t help me, either. They,
+        too, gave me a sample application on GitHub, but it had the same problems as the official one. (Ed. 8/7/17: RisingStack is now using bcrypt in their tutorial application.) You could accuse me of cherry-picking tutorials, and you’d be right, if
+        cherry picking means selecting from the first page of Google results. Let’s choose the higher-ranked-in-results passport-local tutorial from TutsPlus. This one is better, in that it uses brypt with a cost factor of 10 for password hashing. The
+        top result on Google, the tutorial from scotch.io, also uses bcrypt with a lesser cost factor of 8. Both of these are small, but 8 is really small. Most bcrypt libraries these days use 12. The cost factor of 8 was for administrator accounts eighteen
+        years ago when the original bcrypt paper was released. Password storage aside, neither of these tutorials implement password reset functionality, which is left as an exercise to the developer and comes with its own pitfalls. Mistake two: password
+        reset A sister security issue to password storage is that of password reset, and none of the top basic tutorials explain how to do this at all with Passport. You’ll have to follow another. There are a thousand ways to fuck this up. The most common
+        ways I have witnessed that people get password reset wrong are: Predictable tokens. Tokens that are based upon the current time are a good example. Tokens made by bad pseudorandom number generators are less obvious. Bad storage. Storing unencrypted
+        password reset tokens in your DB means that if the DB is compromised, those tokens are effectively plaintext passwords. Generating a long token with a cryptographically secure random number generator stops remote brute force attacks on reset tokens,
+        but it doesn’t stop local attacks. Reset tokens are credentials and should be treated as such. No token expiry. Not expiring your tokens gives attackers more time to exploit the reset window. No secondary data verification. Security questions
+        are the de facto data verification for a reset. Of course, then the developer has to choose good security questions. Security questions have their own problems. While this may seem like security overkill, the email address is something you have,
+        not something you know, and conflates the authentication factors. Your email address becomes the key to every account that just sends a reset token to email. If you’re new all of this, try OWASP’s Password Reset Cheat Sheet. Let’s get back to
+        what the Node world has to offer for us on this. We’ll divert to npm for a second and look for password reset, to see if anyone’s made this. There’s a five-year-old package from the (generally awesome) substack. On the Node.js timeline this module
+        is jurassic, and if I wanted to nitpick, Math.random() is predictable in V8, so it shouldn’t be used for token generation. Also, it doesn’t use Passport, so we’ll move on. Stack Overflow isn’t of too much help, as developer relations from a company
+        called Stormpath loved plugging their IaaS startup on every imaginable post regarding this. Their documentation also popped up everywhere and they have a blogvertisement on password reset, as well. However, all of this is for naught as Stormpath
+        is defunct, and it shuts down entirely August 17, 2017. Alright, back to Google, for the only tutorial that seems to exist out there. We’ll take the first result for the Google search express passport password reset. Here is our old friend bcrypt
+        again, with an even smaller cost factor of 5 used in the text, which is far too small of a cost factor for modern use. However, this tutorial is pretty solid compared to others in that it uses crypto.randomBytes to generate truly random tokens,
+        and expires them if they aren’t used. However #2 and #4 of the practices above aren’t honored by this comprehensive tutorial, and thus the password tokens themselves are vulnerable to authentication mistake number one, credential storage. Thankfully,
+        this is of limited use thanks to the reset expiry. However, these tokens are especially fun if an attacker has read access to the user objects in the DB via BSON injection or can access Mongo freely due to misconfiguration. The attacker can just
+        issue password resets for every user, read the unencrypted tokens from the DB, and set their own passwords for user accounts instead of having to go through the costly process of dictionary attacks on bcrypt hashes with a GPU rig. Mistake three:
+        API tokens API tokens are credentials. They are just as sensitive as passwords or reset tokens. Most every developer knows this and tries to hold their AWS keys, Twitter secrets, etc. close to their chest, however this doesn’t seem to transfer
+        into the code being authored. Let’s use JSON Web Tokens for API credentials. Having a stateless, blacklistable, claimable token is better than the old API key/secret pattern that has been used for the better part of a decade. Perhaps our junior
+        Node.js dev has heard of JWT somewhere before, or saw passport-jwt and decided to implement the JWT strategy. In any case, JWT is where everyone seems to be moving in the Node.js sphere of influence. (The venerable Thomas Ptacek will argue that
+        JWT is bad but I’m afraid that ship has sailed here.) We’ll search for express js jwt on Google, and then find Soni Pandey’s tutorial User Authentication using JWT (JSON Web Token) in Node.js which is the first tutorial result. Unfortunately,
+        this doesn’t actually help us at all, since it doesn’t use Passport, but while we’re here we’ll quickly note the mistakes in credential storage: We’ll store the JWT key in plaintext in the repository. We’ll use a symmetric cipher to store passwords.
+        This means that I can get the encryption key and decrypt all of the passwords in event of a breach. The encryption key is shared with the JWT secret. We’ll use AES-256-CTR for password storage. We shouldn’t be using AES to start, and this mode
+        of operation doesn’t help. I am not sure why this mode specifically was chosen, but the choice alone leaves the ciphertext malleable. Welp. Let’s back out to Google and we find the next tutorial. Scotch, which did an OK job with password storage
+        in their passport-local tutorial, just ignores what they told you before and stores the passwords in plaintext for this example. Uh, we’ll give that a pass for brevity, but it doesn’t help the copypasta crew. That’s because more interestingly,
+        this tutorial also serializes the mongoose User object into the JWT. Let’s clone the Scotch tutorial repository, follow the instructions, and run it. After a DeprecationWarning or three from Mongoose, we can hit http://localhost:8080/setup to
+        create the user, then get a token by posting to /api/authenticate with the default credentials of “Nick Cerminara” and “password”. A token is returned, as displayed from Postman. A JWT token returned from the Scotch tutorial. Note that JSON Web
+        Tokens are signed, but not encrypted. That means that big blob between the two periods is a Base64-encoded object. Quickly decoding it, we get something interesting. I love my passwords in plaintext in tokens. Now, anyone that has even an expired
+        token has your password, as well as whatever else is stored in the Mongoose model. Given that this one came over HTTP, I could have sniffed it off of the wire. What about the next tutorial? The next tutorial, Express, Passport and JSON Web Token
+        (jwt) Authentication for Beginners, contains the same information disclosure vulnerability. The next tutorial from a startup called SlatePeak does the same serialization. At this point, I gave up looking. Mistake four: rate limiting As I alluded
+        to above, I did not find a mention of rate limiting or account locking in any of these authentication tutorials. Without rate limiting, an adversary can perform online dictionary attacks in which a tool like Burp Intruder is run in hopes of gaining
+        access to an account with a weak password. Account lockout also helps with this problem by requiring extended login information from a user the next time they log in. Remember, rate limiting also helps availability. bcrypt is a CPU-intensive function,
+        and without rate limiting functions using bcrypt become an application-level denial of service vector, especially at high work factors. Multiple requests for user registration or login password checking are an easy way to turn a lightweight HTTP
+        request into costly time for your server. While I do not have a tutorial I can point to for these, there are tons of rate limiting middlewares for Express, such as express-rate-limit, express-limiter, and express-brute. I cannot speak to the security
+        of these modules and have not even looked at them; generally I recommend running a reverse proxy in production and allowing rate limiting to requests to be handled by nginx or whatever your load balancer is. Authentication is hard. I’m sure the
+        tutorial developers will defend themselves with “This is just meant to explain the basics! Surely nobody will do this in production!” However, I cannot emphasize enough just how false this is. This is especially true when code is put out there
+        in your tutorials. People will take your word for it — after all, you do have more expertise than they do. If you’re a beginner, don’t trust your tutorials. Copypasta from tutorials will likely get you, your company, and your clients in authentication
+        trouble in the Node.js world. If you really need strong, production-ready, all-in-one authentication libraries, go back to something that holds your hand better, has better stability, and is more proven, like Rails/Devise. The Node.js ecosystem,
+        while accessible, still has a lot of sharp edges for JavaScript-based developers needing to write production web applications in a hurry. If you have a front-end background and don’t know other programming languages, I personally believe it is
+        easier to pick up Ruby and stand on the shoulders of giants than it is to quickly learn how not to shoot yourself in the foot when writing these types of things from scratch. If you’re a tutorial writer, please update your tutorials, especially
+        the boilerplate code. This code will become copypasta into others’ production web applications. If you are a die-hard Node.js developer, hopefully you’ve learned a few things not to do in your authentication system you’re rolling with Passport.
+        You will likely get something wrong. I haven’t gotten close to covering all of the ways to get it wrong in this one post. It shouldn’t be your job to roll your own auth for your Express application. There should be something better. If you’re
+        interested in better securing the Node ecosystem, please DM me @_micaksica on Twitter. This post was brought to you by espresso because I’m out of sake. Addendum (last updated August 10, 2017) This post started out of frustration from the problems
+        I had been seeing, and has somehow taken on a life of its own. It has received more responses, more feedback, and caused more controversy than I had expected it to. Clearly this has been a point of frustration for other developers. If you find
+        errors in this post, please message me and we’ll work to fix them. What we don’t need is another misguided post. That’s the opposite of what we need. However, I implore you: let’s not just work on this post. Let’s make the ecosystem better in
+        the future. If you find errors or have other practices, things you’ve learned in production, or simply improvements, feel free to DM me. It seems that the next best step for us is to write a living document containing “cheat sheet” style best
+        practices around authentication with Node/Express as a patch until there are proven, robust solutions. To that end, I’ve started a repository on GitLab. Feel free to file issues, your recommendations, or make some pull requests to get us started.
+        I’ll work on it as soon as I get a chance this upcoming weekend. JavaScriptNodejsInformation SecurityAuthenticationWeb Development Show your support Clapping shows how much you appreciated micaksica’s story. 437 17 Follow Go to the profile of
+        micaksica micaksica application security & 日本酒. Follow Hacker Noon Hacker Noon how hackers start their afternoons. More on Information Security from Hacker Noon Women in Information Security: Lesley Carhart Go to the profile of Kimberly Crawley
+        Kimberly Crawley 9 Related reads Node.js Emerging as the Universal Development Framework for a Diversity of Applications Go to the profile of Node.js Foundation Node.js Foundation 251 Also tagged JavaScript StackBlitz — Online VS Code IDE for
+        Angular & React ⚡ Go to the profile of Eric Simons Eric Simons 903 Responses Write a response… Conversation with micaksica. Go to the profile of Will Hilton Will Hilton Aug 4 This is so true. I had to roll my own Node authentication middleware
+        stack for my first startup, and it literally took months to learn everything. I’m proud to say I think I did everything right — bcrypt, rate limiting, UUIDs for tokens, etc — but the amount of misinformation I had to plow through was ridiculous.
+        Read more… 2 1 response Go to the profile of micaksica micaksica Aug 4 If you have access to the code and permission, from what you’ve said, you may have a good base for something to release as a boilerplate. It may be good to open-source it and
+        make a request for audit. 6 Conversation between Yoshua Wuyts and micaksica. Go to the profile of Yoshua Wuyts Yoshua Wuyts Aug 10 While not bad, bcrypt does not guard agains GPU based brute force attacks. Bcrypt might have been the best in class
+        a couple of years ago, in 2017 it no longer is. Check out https://github.com/emilbayes/secure-password for an Argon2 based password module that guards agains this (upping the memory). Good view on the topic: https://www.youtube.com/watch?v=EAaweXzUVh4
+        1 1 response Go to the profile of micaksica micaksica Aug 11 Thanks Yoshua. I’m aware of Argon2i, and you are entirely correct. I actually had a debate about this with a colleague, and whether or not I should bring up Argon2i or stick with bcrypt
+        for the purposes of this article. I kept with bcrypt largely because: it is not bad, even… Read more… 1 Conversation with micaksica. Go to the profile of Jonathan M. Hethey Jonathan M. Hethey Aug 10 Thanks for the mention! I’m considering to write
+        a follow up to this that uses sufficient password hashing and tokens for the JWT instead of the user id so it never hits the users table/collection unless a re-auth needs to happen. I found the post on reddit, very honored anyone reads it! 1 1
+        response Go to the profile of micaksica micaksica Aug 10 Thanks for listening, Jonathan. Even if you decide not to write a new tutorial that follows this advice, I’d highly recommend editing your existing one to explain that there are security
+        ramifications that need to be addressed, and link them to the OWASP cheat sheets for authentication and password storage. 1 1 response Conversation with micaksica. Go to the profile of Mike Montoya Mike Montoya Aug 5 Could you look at the authentication
+        provided by Feathers.js? It seems fully featured, with an auth management package. They’re using bcrypt with a cost factor of 10 for the password hashing. They seem to just be using crypto.randomBytes for generating reset tokens. 2 1 response
+        Go to the profile of micaksica micaksica Aug 5 Thank you for bringing this project to my attention. Can you DM me on Twitter? Conversation with micaksica. Go to the profile of Jose Romainello Jose Romainello Aug 4 Compared to Devise, Passport
+        is simply authentication middleware, and does not handle any of the other parts of authentication for you: that means the Node.js developer is likely to ... Yes, passport is very different to devise. You can compare “passport.js” to “omniauth”.
+        I don’t know about any equivalent to devise in the node.js world. 1 1 response Go to the profile of micaksica micaksica Aug 5 Jose Romainello, you’re totally right — Devise is a different animal to Passport.js. My point is that what beginners
+        to Node.js need is Devise, not just Passport.js. express-generator will build you the basics of an Express application. There should be a Devise-like generator for these things, and that’s why I wrote this post. It’s too easy to get… Read more…
+        1 Conversation with micaksica. Go to the profile of Sébastien Vercammen Sébastien Vercammen Aug 10 This is one of those articles where the author decides to make him-/herself look better by throwing others under the bus without having put in effort
+        to improve the existing work. Have you contacted all the authors of those other articles before publishing yours? Did you give them a chance to comment and explain the context… Read more… 1 1 response Go to the profile of micaksica micaksica Aug
+        11 I did begin working with some of the Feathers.js team on some hardening of their authentication, and there are multiple outstanding pull requests getting the ball rolling there. It’s a start. I, too, am swamped with multiple commercial projects;
+        I understand that this is an issue. My day job is exactly what I did here… Read more… 1 Show all responses 437
+
+
+
+
+    </div>
+
+    <div id="bg"></div>
+    <div class="mask">
+        <div class="browser-icons">
+            <div class="">
+                為了更好的體驗，請您使用更先進的瀏覽器！
+            </div>
+            <div class="dl-browser">
+                <a href="https://www.google.com.tw/chrome/browser/desktop/index.html">
+                    <img src="./images/google-chrome.png" alt="Google Chrome"><br>
+                    Google Chrome
+                </a>
+            </div>
+            <div class="dl-browser">
+                <a href="https://www.mozilla.org/zh-TW/firefox/new/">
+                    <img src="./images/firefox.png" alt="FireFox"><br>
+                    FireFox
+                </a>
+            </div>
+            <div class="dl-browser">
+                <a href="https://vivaldi.com/download/?lang=zh_TW">
+                    <img src="./images/vivaldi.png" alt="Vivaldi"><br>
+                    Vivaldi
+                </a>
+            </div>
+            <div class="dl-browser">
+                <a href="https://www.microsoft.com/zh-tw/windows/microsoft-edge">
+                    <img src="./images/microsoft-edge.png" alt="Microsoft Edge"><br>
+                    Microsoft Edge
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/index.js" charset="utf-8"></script>
+</body>
+
+</html>
